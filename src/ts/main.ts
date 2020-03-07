@@ -9,6 +9,7 @@ enum OperatorType {
 	Multiplication = 2,
 	Division = 3,
 	Equality = 4,
+	__Length = 5,
 }
 
 class ANode {
@@ -76,6 +77,10 @@ class ANode {
 		}
 	}
 
+	getText() : string {
+		return this.text == "" ? String(this.value) : this.text;
+	}
+
 	toString() : string {
 		switch (this.type) {
 			case ANodeType.Number: {
@@ -90,6 +95,41 @@ class ANode {
 				return lhsString + " " + this.text + " " + rhsString;
 			}
 		}
+	}
+
+	setValue(value : number) {
+		this.value = value;
+		if (this.type == ANodeType.Operator) {
+			switch (this.value) {
+				case OperatorType.Addition: {
+					this.text = '+';
+					break;
+				}
+				case OperatorType.Multiplication: {
+					this.text = "*";
+					break;
+				}
+				case OperatorType.Division: {
+					this.text = "/";
+					break;
+				}
+				case OperatorType.Equality: {
+					this.text = "=";
+					break;
+				}
+			}
+		}
+	}
+
+	inOrderTraversal(nodes : ANode[] = []) {
+		if (this.lhs) {
+			this.lhs.inOrderTraversal(nodes);
+		} 
+		nodes.push(this);
+		if (this.rhs) {
+			this.rhs.inOrderTraversal(nodes);
+		}
+		return nodes;
 	}
 
 	isAddition() {
@@ -322,26 +362,6 @@ testValue("8 + 2 = 10", 1);
 testValue("8*2 = 15", 0);
 testValue("8 + x", 10, new Map([["x", 2]]));
 
-// let raw1 = "5 +7";
-// let node1 = ANode.parse2(raw1);
-// console.log(raw1, node1, node1 ? node1.evaluate() : "null");
-
-// let raw2 = "5 + 2*3+7";
-// let node2 = ANode.parse2(raw2);
-// console.log(raw2, node2, node2 ? node2.evaluate() : "null");
-
-// let raw3 = "8*5 + 2*3+7";
-// let node3 = ANode.parse2(raw3);
-// console.log(raw3, node3, node3 ? node3.evaluate() : "null");
-
-// let raw4 = "8 + 2 + 7 + 9";
-// let node4 = ANode.parse2(raw4);
-// console.log(raw4, node4, node4 ? node4.evaluate() : "null");
-
-// let raw5 = "8 * 2 / 4 * 3";
-// let node5 = ANode.parse2(raw5);
-// console.log(raw5, node5, node5 ? node5.evaluate() : "null");
-
 enum TileType {
 	Number,
 	Variable,
@@ -350,30 +370,39 @@ enum TileType {
 class Tile {
 
 	private root : Rectangle;
-	private value : number;
-	private type : TileType;
+	private node : ANode;
+	private label : TextLabel;
+	wasClicked : () => void;
 	
 	layout : Layout;
 	children : Component[] = [];
 	upperLeftClamp : Pos = {x : 0, y : 0};
 	lowerRightClamp : Pos = {x : 0, y : 0};
 
-	constructor(value : number, type : TileType) {
-		this.value = value;
-		this.type = type;
+	constructor(node : ANode, wasClicked : () => void) {
+		this.wasClicked = wasClicked;
+		this.node = node;
 
 		this.layout = new Layout(
-			0, 0, 0, 0,
-			0, 0, 50, 50
+			0, 0, 5, 0,
+			0, 0, 50 + 10, 50
 		);
-		this.layout.isDraggable = true;
+		this.layout.isDraggable = false;
 
 		this.root = new Rectangle(new Layout(
 			0, 0, 0, 0,
-			1, 1, 0, 0
+			1, 1, -10, 0
 		));
 
+		this.label = new TextLabel(new Layout(
+			0.2, 0.2, 0, 0,
+			1, 1, -10, 0
+		), node.getText());
+		this.label.setFontSize(36);
+		this.label.fillStyle = Constants.Colors.Black;
+
 		this.children.push(this.root);
+		this.children.push(this.label);
 	}
 
 	clamp() {
@@ -401,15 +430,64 @@ class Tile {
 		timeMS : DOMHighResTimeStamp) {
 
 	}
-	// onClick? : (e : MouseEvent) => InputResponse;
-	// onMouseDown? : (e : MouseEvent) => boolean;
-	// onMouseUp? : (e : MouseEvent) => boolean;
-	// onMouseMove? : (e : MouseEvent) => boolean;
-	// onMouseOut? : (e : MouseEvent) => void;
-	// onKeyDown? : (e : KeyboardEvent) => boolean;
-	// didLayout? : () => void;
-	// blur? : () => void;
+	
+	onClick(e : MouseEvent) {
+		this.wasClicked();
+		this.label.text = this.node.getText();
+		return InputResponse.Sunk;
+	}
+}
 
+class Equation {
+
+	layout : Layout;
+	children : Component[] = [];
+// enum ANodeType {
+// 	Variable,
+// 	Number,
+// 	Operator,
+// }
+
+// enum OperatorType {
+// 	Addition = 1,
+// 	Multiplication = 2,
+// 	Division = 3,
+// 	Equality = 4,
+// 	__Length = 5,
+// }
+	constructor(layout : Layout, raw : string) {
+
+		this.layout = layout;
+		this.layout.relativeLayout = RelativeLayout.StackHorizontal;
+		
+		let root = ANode.parse(raw);
+
+		console.assert(root != null);
+		if (root != null) {
+			let iot : ANode[] = root.inOrderTraversal();
+			for (let a of iot) {
+				let o = a.text == "" ? String(a.value) : a.text;
+				console.log("Node:", o);
+				let tile = new Tile(a, function() {
+					console.log("Clicked:", a.getText());
+					if (a.type == ANodeType.Operator) {
+						let newValue = (a.value%3) + 1;
+						a.setValue(newValue);
+					}
+					console.log("Now:", a.getText());
+					console.log("New computation:", root ? root.evaluate() : "NULL");
+				});
+				this.children.push(tile);
+			}
+		}
+	}
+
+	render(
+		ctx : CanvasRenderingContext2D,
+		cp : ContentProvider,
+		timeMS : DOMHighResTimeStamp) {
+
+	}
 }
 
 class Main {
@@ -418,41 +496,20 @@ class Main {
 	constructor(container : HTMLElement) {
 		this.game = new Game(container, {});
 
-		let margin = 30;
-		let bottomDrawerHeight = 150;
-		let rect1Layout = new Layout(
-			0, 0, margin, margin,
-			0.5, 1.0, margin*(-1.5), margin*(-2) - bottomDrawerHeight
+		let equationLayout = new Layout(
+			0.5, 0.5, 0, 0,
+			1, 1, 0, 0
 		);
-
-		let rect1 = new Rectangle(rect1Layout);
-
-		let rect2Layout = new Layout(
-			0.5, 0, margin*(-1.5 + 1 + 1), margin,
-			0.5, 1.0, margin*(-1.5), margin*(-2) - bottomDrawerHeight
+		let equation = new Equation(
+			equationLayout,
+			"2*3+4"
 		);
+		equationLayout.anchor.x = 0.5;
+		equationLayout.anchor.y = 0.5;
 
-		let rect2 = new Rectangle(rect2Layout);
-
-		let tile1 = new Tile(0, TileType.Number);
-
-		this.game.components.push(rect1);
-		this.game.components.push(rect2);
-		this.game.components.push(tile1);
+		this.game.components.push(equation);
 
 		this.game.doLayout();
-
-		tile1.upperLeftClamp = {
-			x : margin + 2,
-			y : margin + 2,
-		};
-		tile1.lowerRightClamp = {
-			x : rect1.layout.computed.position.x + rect1.layout.computed.size.width - 50 - 2,
-			y : rect1.layout.computed.position.y + rect1.layout.computed.size.height - 50 - 2,
-		};
-		tile1.clamp();
-		this.game.doLayout();
-
 	}
 }
 

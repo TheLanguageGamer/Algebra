@@ -33,8 +33,8 @@ class Game {
             if (_this.controller.needsLayout
                 && _this.controller.needsLayout()) {
                 _this.doLayout();
-                if (_this.controller.didResize) {
-                    _this.controller.didResize(screenSize, _this.contentProvider);
+                if (_this.controller.screenDidResize) {
+                    _this.controller.screenDidResize(screenSize, _this.contentProvider);
                 }
             }
             if (_this.controller.onUpdate) {
@@ -56,12 +56,12 @@ class Game {
             _this.viewport.width = screenSize.width;
             _this.viewport.height = screenSize.height;
             _this.context = _this.viewport.getContext('2d');
-            if (_this.controller.willResize) {
-                _this.controller.willResize(screenSize, _this.contentProvider);
+            if (_this.controller.screenWillResize) {
+                _this.controller.screenWillResize(screenSize, _this.contentProvider);
             }
             _this.doLayout();
-            if (_this.controller.didResize) {
-                _this.controller.didResize(screenSize, _this.contentProvider);
+            if (_this.controller.screenDidResize) {
+                _this.controller.screenDidResize(screenSize, _this.contentProvider);
             }
             _this.context.clearRect(0, 0, _this.viewport.width, _this.viewport.height);
             _this.renderRecursive(_this.components, performance.now());
@@ -71,12 +71,14 @@ class Game {
             if (_this._stopped) {
                 return;
             }
+            console.log("click");
             _this.clickRecursive(_this.components, e);
         });
         window.addEventListener('mousedown', function (e) {
             if (_this._stopped) {
                 return;
             }
+            console.log("mousedown");
             if (_this.focusedComponent
                 && _this.focusedComponent.blur
                 && !_this.focusedComponent.layout.containsPosition(e.offsetX, e.offsetY)) {
@@ -168,6 +170,9 @@ class Game {
     }
     clickRecursive(components, e) {
         for (let component of components) {
+            if (!component.layout.visible) {
+                continue;
+            }
             if (component.onClick
                 && component.layout.containsPosition(e.offsetX, e.offsetY)) {
                 let response = component.onClick(e);
@@ -186,6 +191,9 @@ class Game {
     }
     mouseDownRecursive(components, e) {
         for (let component of components) {
+            if (!component.layout.visible) {
+                continue;
+            }
             if (component.children) {
                 if (this.mouseDownRecursive(component.children, e)) {
                     return true;
